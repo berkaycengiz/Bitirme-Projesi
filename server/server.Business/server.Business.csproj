@@ -6,4 +6,21 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="12.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\server.Data\server.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Category\Handlers\" />
+    <Folder Include="Category\Models\" />
+    <Folder Include="Category\Requests\" />
+    <Folder Include="OrderDetail\Handlers\" />
+    <Folder Include="OrderDetail\Models\" />
+    <Folder Include="OrderDetail\Requests\" />
+  </ItemGroup>
+
 </Project>

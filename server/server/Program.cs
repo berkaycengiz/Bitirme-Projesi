@@ -1,15 +1,19 @@
+using server.Data; // ServiceRegistration'ýn olduðu namespace
+using server.Business;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// 1. Data katmanýndaki servisleri buraya kaydediyoruz
+// Bu satýr appsettings.json'daki baðlantý cümlesini okur ve Context'i ayaða kaldýrýr
+builder.Services.AddPersistence(builder.Configuration); // Data katmaný kayýtlarý
+builder.Services.AddBusinessServices();
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -17,9 +21,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();

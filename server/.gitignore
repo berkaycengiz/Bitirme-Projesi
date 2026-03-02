@@ -1,3 +1,34 @@
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# Packages
+*.nupkg
+# NuGet packages directory
+**/packages/*
+# Except build/ folder
+!**/packages/build/
+
+# Entity Framework Core Migration ID files
+*.pfx
+
+# VS Code files
+.vscode/
+
+# Operating System files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
 .vs/
 bin/
 obj/
