@@ -4,17 +4,22 @@ using server.Business.Order.Models;
 using server.Business.Order.Requests;
 using server.Data.Context;
 using server.Data.EF;
-using server.Data; // Entity sınıflarını (Order, OrderDetail) kullanabilmek için
+using server.Data;
+using Microsoft.AspNetCore.SignalR;
+using server.Business.Hubs; // EKSİK: Hub'ın yerini belirtmeliyiz
+using server.Data.Enums; // EKSİK: OrderStatus Enum'ını kullanabilmek için
 
 namespace server.Business.Order.Handlers;
 
 public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrderModel>
 {
     private readonly RestaurantContext _context;
+    private readonly IHubContext<OrderHub> _hubContext;
 
-    public CreateOrderHandler(RestaurantContext context)
+    public CreateOrderHandler(RestaurantContext context, IHubContext<OrderHub> hubContext)
     {
         _context = context;
+        _hubContext = hubContext;
     }
 
     public async Task<CreateOrderModel> Handle(CreateOrderRequest request, CancellationToken cancellationToken)
@@ -22,9 +27,10 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrde
         // 1. Yeni bir ana sipariş kaydı oluşturuyoruz
         var newOrder = new server.Data.EF.Order
         {
-            TableNumber = request.TableNumber, // QR'dan gelen masa no
+            TableNumber = request.TableNumber,
             OrderDate = DateTime.Now,
-            OrderStatus = "Hazırlanıyor",
+            // DÜZELTME: "OrderStatus" olan yerleri "Status" (Enum) yaptık
+            Status = OrderStatus.Preparing,
             OrderDetails = new List<OrderDetail>()
         };
 
@@ -33,18 +39,17 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrde
         // 2. Sepetteki her bir ürünü tek tek dönüyoruz
         foreach (var item in request.Items)
         {
-            // Veri tabanından ürünün güncel fiyatını çekiyoruz
-            var product = await _context.Products.FindAsync(item.ProductId);
+            // DÜZELTME: FindAsync kullanımı sadece ProductID (int) bekler
+            var product = await _context.Products.FindAsync(new object[] { item.ProductId }, cancellationToken);
 
             if (product != null)
             {
-                // Her bir ürün için detay kaydı ve usta için not ekliyoruz
                 var detail = new OrderDetail
                 {
                     ProductID = item.ProductId,
                     Quantity = item.Quantity,
                     UnitPrice = product.Price,
-                    ProductNote = item.Note // "Turşu olmasın" gibi özel not buraya geliyor
+                    ProductNote = item.Note
                 };
 
                 newOrder.OrderDetails.Add(detail);
@@ -55,10 +60,25 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrde
         newOrder.TotalPrice = totalAmount;
 
         // 3. Siparişi ve detaylarını veri tabanına kaydediyoruz
-        await _context.Orders.AddAsync(newOrder);
+        await _context.Orders.AddAsync(newOrder, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // 4. Sonucu dönüyoruz
+        // --- 4. SIGNALR BİLDİRİMİ GÖNDERME ---
+        await _hubContext.Clients.Group("KitchenGroup").SendAsync("ReceiveNewOrder", new
+        {
+            OrderId = newOrder.OrderID,
+            TableNumber = newOrder.TableNumber,
+            Status = newOrder.Status.ToString(), // DÜZELTME: Enum ismi gitsin
+            OrderTime = newOrder.OrderDate.ToString("HH:mm"),
+            TotalAmount = newOrder.TotalPrice,
+            Details = newOrder.OrderDetails.Select(d => new {
+                ProductId = d.ProductID,
+                Quantity = d.Quantity,
+                Note = d.ProductNote
+            })
+        }, cancellationToken);
+
+        // 5. Sonucu dönüyoruz
         return new CreateOrderModel
         {
             IsSuccess = true,

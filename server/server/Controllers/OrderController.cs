@@ -29,5 +29,15 @@ namespace server.Api.Controllers
 
             return BadRequest(result);
         }
+
+
+        [HttpPatch("UpdateStatus")]
+        public async Task<IActionResult> UpdateStatus([FromBody] UpdateOrderStatusRequest request)
+        {
+            var result = await _mediator.Send(request);
+
+            // result artık bir model (nesne), içindeki IsSuccess özelliğine bakmalıyız
+            return result.IsSuccess ? Ok(result) : NotFound(result.Message);
+        }
     }
 }

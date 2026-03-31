@@ -1,4 +1,6 @@
-﻿namespace server.Data.EF;
+﻿using server.Data.Enums;
+
+namespace server.Data.EF;
 
 public class Order
 {
@@ -6,7 +8,7 @@ public class Order
     public int TableNumber { get; set; } // QR'dan gelen masa bilgisi
     public DateTime OrderDate { get; set; }
     public decimal TotalPrice { get; set; }
-    public string OrderStatus { get; set; } // "Hazırlanıyor", "Tamamlandı" vb.
+    public OrderStatus Status { get; set; }
 
     public List<OrderDetail> OrderDetails { get; set; }
 }
