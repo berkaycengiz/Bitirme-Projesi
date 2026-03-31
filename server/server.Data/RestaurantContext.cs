@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using server.Data;
 using server.Data.EF; // Product, Category gibi sınıfların olduğu klasör
 
@@ -14,6 +14,7 @@ namespace server.Data.Context
         public DbSet<Category> Categories { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderDetail> OrderDetails { get; set; }
+        public DbSet<AppUser> Users { get; set; }
         // Diğer tabloları (Table, OrderDetail vb.) buraya ekleyebilirsin
     }
 }

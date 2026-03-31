@@ -1,4 +1,7 @@
-﻿public class Category
+﻿
+namespace server.Data.EF;
+
+public class Category
 {
     public int CategoryID { get; set; }
     public string CategoryName { get; set; }
