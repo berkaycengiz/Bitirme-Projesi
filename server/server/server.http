@@ -1,6 +1,97 @@
 @server_HostAddress = http://localhost:5037
 
-GET {{server_HostAddress}}/weatherforecast/
+### Users - Get All
+GET {{server_HostAddress}}/api/user
 Accept: application/json
 
-###
+### Users - Register/Create User
+POST {{server_HostAddress}}/api/user
+Content-Type: application/json
+
+{
+  "username": "waiter1",
+  "password": "password123",
+  "role": 2
+}
+
+### Auth - Login (JWT)
+POST {{server_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "waiter1",
+  "password": "password123"
+}
+
+### Categories - Get All
+GET {{server_HostAddress}}/api/category
+Accept: application/json
+
+### Categories - Create Category
+POST {{server_HostAddress}}/api/category
+Content-Type: application/json
+
+{
+  "categoryName": "Tatlılar",
+  "description": "Nefis Restoran Tatlıları"
+}
+
+### Products - Get All (with Category Filter)
+GET {{server_HostAddress}}/api/product?categoryId=1
+Accept: application/json
+
+### Products - Create Product
+POST {{server_HostAddress}}/api/product
+Content-Type: application/json
+
+{
+  "productName": "Fırın Sütlaç",
+  "description": "Karadeniz usulü fırın sütlaç",
+  "price": 85.00,
+  "imageUrl": "https://example.com/sutlac.jpg",
+  "categoryId": 1
+}
+
+### Orders - Get Active Orders
+GET {{server_HostAddress}}/api/order/active
+Accept: application/json
+
+### Orders - Create Order
+POST {{server_HostAddress}}/api/order
+Content-Type: application/json
+
+{
+  "tableNumber": 3,
+  "items": [
+    {
+      "productId": 1,
+      "quantity": 2,
+      "note": "Bol fındıklı olsun"
+    }
+  ]
+}
+
+### Orders - Update Status
+PATCH {{server_HostAddress}}/api/order/UpdateStatus
+Content-Type: application/json
+
+{
+  "orderId": 1,
+  "newStatus": 1
+}
+
+### Tables - Get All Tables
+GET {{server_HostAddress}}/api/table
+Accept: application/json
+
+### Tables - Update Table Occupied Status
+PATCH {{server_HostAddress}}/api/table/3/status
+Content-Type: application/json
+
+true
+
+### Tables - Send Service Request (Garson Çağır)
+POST {{server_HostAddress}}/api/table/3/service-request
+Content-Type: application/json
+
+"CallWaiter"

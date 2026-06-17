@@ -1,38 +1,38 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using server.Business.Product.Requests;
+using server.Business.Category.Requests;
 
 namespace server.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ProductController : ControllerBase
+    public class CategoryController : ControllerBase
     {
         private readonly IMediator _mediator;
 
-        public ProductController(IMediator mediator)
+        public CategoryController(IMediator mediator)
         {
             _mediator = mediator;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll([FromQuery] int? categoryId)
+        public async Task<IActionResult> GetAll()
         {
-            var response = await _mediator.Send(new GetAllProductsRequest { CategoryID = categoryId });
-            return Ok(response);
+            var result = await _mediator.Send(new GetAllCategoriesRequest());
+            return Ok(result);
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateProductRequest request)
+        public async Task<IActionResult> Create([FromBody] CreateCategoryRequest request)
         {
             var result = await _mediator.Send(request);
             return result.IsSuccess ? Ok(result) : BadRequest(result.Message);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] UpdateProductRequest request)
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateCategoryRequest request)
         {
-            request.ProductID = id;
+            request.CategoryID = id;
             var result = await _mediator.Send(request);
             return result.IsSuccess ? Ok(result) : BadRequest(result.Message);
         }
@@ -40,7 +40,7 @@ namespace server.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var result = await _mediator.Send(new DeleteProductRequest { ProductID = id });
+            var result = await _mediator.Send(new DeleteCategoryRequest { CategoryID = id });
             return result.IsSuccess ? Ok(result) : BadRequest(result.Message);
         }
     }

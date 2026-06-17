@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using server.Business.Order.Models;
@@ -22,8 +22,9 @@ public class UpdateOrderStatusHandler : IRequestHandler<UpdateOrderStatusRequest
 
     public async Task<UpdateOrderStatusModel> Handle(UpdateOrderStatusRequest request, CancellationToken cancellationToken)
     {
-        // 1. İlgili siparişi buluyoruz
+        // 1. İlgili siparişi tabloya include ederek buluyoruz
         var order = await _context.Orders
+            .Include(o => o.Table)
             .FirstOrDefaultAsync(x => x.OrderID == request.OrderId, cancellationToken);
 
         if (order == null)
@@ -49,7 +50,7 @@ public class UpdateOrderStatusHandler : IRequestHandler<UpdateOrderStatusRequest
         await _hubContext.Clients.All.SendAsync("OrderStatusChanged", new
         {
             OrderId = order.OrderID,
-            TableNumber = order.TableNumber,
+            TableNumber = order.Table.TableNumber,
             NewStatus = order.Status.ToString(), // DÜZELTME: "order.OrderStatus" değil "order.Status"
             UpdateDate = DateTime.Now.ToString("HH:mm:ss")
         }, cancellationToken);

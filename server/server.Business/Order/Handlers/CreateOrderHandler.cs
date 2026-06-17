@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using server.Business.Order.Models;
 using server.Business.Order.Requests;
@@ -24,12 +24,24 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrde
 
     public async Task<CreateOrderModel> Handle(CreateOrderRequest request, CancellationToken cancellationToken)
     {
-        // 1. Yeni bir ana sipariş kaydı oluşturuyoruz
+        // 1. TableNumber'a göre RestaurantTable kaydını bul
+        var table = await _context.RestaurantTables
+            .FirstOrDefaultAsync(t => t.TableNumber == request.TableNumber, cancellationToken);
+
+        if (table == null)
+        {
+            return new CreateOrderModel
+            {
+                IsSuccess = false,
+                Message = $"{request.TableNumber} numaralı masa bulunamadı."
+            };
+        }
+
+        // 2. Yeni bir ana sipariş kaydı oluşturuyoruz
         var newOrder = new server.Data.EF.Order
         {
-            TableNumber = request.TableNumber,
+            TableID = table.TableID,
             OrderDate = DateTime.Now,
-            // DÜZELTME: "OrderStatus" olan yerleri "Status" (Enum) yaptık
             Status = OrderStatus.Preparing,
             OrderDetails = new List<OrderDetail>()
         };
@@ -67,8 +79,8 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrde
         await _hubContext.Clients.Group("KitchenGroup").SendAsync("ReceiveNewOrder", new
         {
             OrderId = newOrder.OrderID,
-            TableNumber = newOrder.TableNumber,
-            Status = newOrder.Status.ToString(), // DÜZELTME: Enum ismi gitsin
+            TableNumber = table.TableNumber,
+            Status = newOrder.Status.ToString(),
             OrderTime = newOrder.OrderDate.ToString("HH:mm"),
             TotalAmount = newOrder.TotalPrice,
             Details = newOrder.OrderDetails.Select(d => new {

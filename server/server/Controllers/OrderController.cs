@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using server.Business.Order.Requests; // Senin kurduğun klasör yapısına göre
 
@@ -38,6 +38,13 @@ namespace server.Api.Controllers
 
             // result artık bir model (nesne), içindeki IsSuccess özelliğine bakmalıyız
             return result.IsSuccess ? Ok(result) : NotFound(result.Message);
+        }
+
+        [HttpGet("active")]
+        public async Task<IActionResult> GetActiveOrders()
+        {
+            var result = await _mediator.Send(new GetActiveOrdersRequest());
+            return Ok(result);
         }
     }
 }

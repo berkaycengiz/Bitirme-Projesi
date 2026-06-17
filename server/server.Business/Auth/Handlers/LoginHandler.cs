@@ -25,9 +25,9 @@ public class LoginHandler : IRequestHandler<LoginRequest, LoginModel>
     public async Task<LoginModel> Handle(LoginRequest request, CancellationToken cancellationToken)
     {
         var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Username == request.Username && u.PasswordHash == request.Password, cancellationToken);
+            .FirstOrDefaultAsync(u => u.Username == request.Username, cancellationToken);
 
-        if (user == null) 
+        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash)) 
         {
             return new LoginModel { IsSuccess = false, Message = "Kullanıcı adı veya şifre hatalı!" };
         }

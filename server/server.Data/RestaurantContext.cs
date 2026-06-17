@@ -15,6 +15,40 @@ namespace server.Data.Context
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderDetail> OrderDetails { get; set; }
         public DbSet<AppUser> Users { get; set; }
-        // Diğer tabloları (Table, OrderDetail vb.) buraya ekleyebilirsin
+        public DbSet<RestaurantTable> RestaurantTables { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            // RestaurantTable primary key (convention dışı isim olduğu için açıkça belirt)
+            modelBuilder.Entity<RestaurantTable>()
+                .HasKey(t => t.TableID);
+
+            // Her masa numarası benzersiz olmalı
+            modelBuilder.Entity<RestaurantTable>()
+                .HasIndex(t => t.TableNumber)
+                .IsUnique();
+
+            // QR kodu da benzersiz olmalı
+            modelBuilder.Entity<RestaurantTable>()
+                .HasIndex(t => t.QrCode)
+                .IsUnique();
+
+            // Order -> RestaurantTable ilişkisi
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Table)
+                .WithMany(t => t.Orders)
+                .HasForeignKey(o => o.TableID)
+                .OnDelete(DeleteBehavior.Restrict); // Masayı silince siparişleri de silme
+
+            // Fiyatın 0'dan büyük olmasını zorunlu kılan Check Constraint
+            modelBuilder.Entity<Product>()
+                .ToTable(t => t.HasCheckConstraint("CK_Products_Price", "[Price] > 0"));
+
+            // Miktarın 1 veya daha fazla olmasını zorunlu kılan Check Constraint
+            modelBuilder.Entity<OrderDetail>()
+                .ToTable(t => t.HasCheckConstraint("CK_OrderDetails_Quantity", "[Quantity] >= 1"));
+        }
     }
 }

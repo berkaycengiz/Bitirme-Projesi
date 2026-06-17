@@ -1,6 +1,6 @@
-﻿using server.Data;
+using server.Data;
 using server.Business;
-using server.Api.Hubs;
+using server.Business.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -46,6 +46,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+app.UseMiddleware<server.Api.Middlewares.ExceptionMiddleware>();
 
 // --- Middleware Yapılandırması ---
 if (app.Environment.IsDevelopment())

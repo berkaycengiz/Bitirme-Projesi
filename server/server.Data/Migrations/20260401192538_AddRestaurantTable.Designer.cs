@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using server.Data.Context;
 
@@ -11,9 +12,11 @@ using server.Data.Context;
 namespace server.Data.Migrations
 {
     [DbContext(typeof(RestaurantContext))]
-    partial class RestaurantContextModelSnapshot : ModelSnapshot
+    [Migration("20260401192538_AddRestaurantTable")]
+    partial class AddRestaurantTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -123,10 +126,7 @@ namespace server.Data.Migrations
 
                     b.HasIndex("ProductID");
 
-                    b.ToTable("OrderDetails", t =>
-                        {
-                            t.HasCheckConstraint("CK_OrderDetails_Quantity", "[Quantity] >= 1");
-                        });
+                    b.ToTable("OrderDetails");
                 });
 
             modelBuilder.Entity("server.Data.EF.Product", b =>
@@ -162,10 +162,7 @@ namespace server.Data.Migrations
 
                     b.HasIndex("CategoryID");
 
-                    b.ToTable("Products", t =>
-                        {
-                            t.HasCheckConstraint("CK_Products_Price", "[Price] > 0");
-                        });
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("server.Data.EF.RestaurantTable", b =>
