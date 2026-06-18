@@ -4,6 +4,7 @@ using server.Business.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,6 +49,23 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.UseMiddleware<server.Api.Middlewares.ExceptionMiddleware>();
+
+// --- Veritabanı Otomatik Göç (Migration) ve Seed Verisi Ekleme ---
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var dbContext = services.GetRequiredService<server.Data.Context.RestaurantContext>();
+        dbContext.Database.Migrate();
+        server.Api.DbSeeder.Seed(dbContext);
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Veritabanı oluşturulurken veya seed edilirken bir hata oluştu.");
+    }
+}
 
 // --- Middleware Yapılandırması ---
 if (app.Environment.IsDevelopment())
