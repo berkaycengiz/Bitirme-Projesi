@@ -21,6 +21,11 @@ namespace server.Data.Context
         {
             base.OnModelCreating(modelBuilder);
 
+            // AppUser Role enumunu veritabanında string olarak sakla (Admin, Waiter, Kitchen)
+            modelBuilder.Entity<AppUser>()
+                .Property(u => u.Role)
+                .HasConversion<string>();
+
             // RestaurantTable primary key (convention dışı isim olduğu için açıkça belirt)
             modelBuilder.Entity<RestaurantTable>()
                 .HasKey(t => t.TableID);
@@ -48,7 +53,11 @@ namespace server.Data.Context
 
             // Miktarın 1 veya daha fazla olmasını zorunlu kılan Check Constraint
             modelBuilder.Entity<OrderDetail>()
-                .ToTable(t => t.HasCheckConstraint("CK_OrderDetails_Quantity", "[Quantity] >= 1"));
+                .ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_OrderDetails_Quantity", "[Quantity] >= 1");
+                    t.HasTrigger("trg_UpdateOrderTotalPrice");
+                });
         }
     }
 }
