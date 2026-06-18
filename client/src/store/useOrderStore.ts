@@ -282,10 +282,10 @@ export const useOrderStore = create<OrderState>((set, get) => {
         console.log('SignalR Connected!');
 
         // Join appropriate group
-        if (role === 'Kitchen') {
+        if (role === 'chef') {
           await conn.invoke('JoinKitchenGroup');
           console.log('SignalR: Joined KitchenGroup');
-        } else if (role === 'Waiter' || role === 'Admin') {
+        } else if (role === 'waiter' || role === 'admin') {
           await conn.invoke('JoinWaiterGroup');
           console.log('SignalR: Joined WaiterGroup');
         }

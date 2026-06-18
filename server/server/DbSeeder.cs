@@ -2,7 +2,6 @@ using BCrypt.Net;
 using Microsoft.EntityFrameworkCore;
 using server.Data.Context;
 using server.Data.EF;
-using server.Data.Enums;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -21,19 +20,19 @@ namespace server.Api
                     {
                         Username = "admin",
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
-                        Role = UserRole.Admin
+                        Role = "admin"
                     },
                     new AppUser
                     {
                         Username = "waiter",
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword("waiter123"),
-                        Role = UserRole.Waiter
+                        Role = "waiter"
                     },
                     new AppUser
                     {
                         Username = "chef",
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword("chef123"),
-                        Role = UserRole.Kitchen
+                        Role = "chef"
                     }
                 };
 

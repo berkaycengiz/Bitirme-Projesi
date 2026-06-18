@@ -15,7 +15,7 @@ const Login = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && role) {
-      if (role === 'Kitchen') {
+      if (role === 'chef') {
         navigate('/chef');
       } else {
         navigate('/waiter');

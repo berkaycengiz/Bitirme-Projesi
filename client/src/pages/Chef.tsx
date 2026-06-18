@@ -16,16 +16,16 @@ const Chef = () => {
 
   // Route protection
   useEffect(() => {
-    if (!isAuthenticated || role !== 'Kitchen') {
+    if (!isAuthenticated || role !== 'chef') {
       navigate('/login');
     }
   }, [isAuthenticated, role, navigate]);
 
   // SignalR & Data fetching
   useEffect(() => {
-    if (isAuthenticated && role === 'Kitchen') {
+    if (isAuthenticated && role === 'chef') {
       fetchActiveOrders();
-      connectSignalR('Kitchen');
+      connectSignalR('chef');
     }
     return () => {
       disconnectSignalR();

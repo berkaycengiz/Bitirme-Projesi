@@ -1,0 +1,9 @@
+# Build outputs
+client/dist/
+dist/
+node_modules/
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo

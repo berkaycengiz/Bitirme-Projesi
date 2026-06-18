@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using server.Business.Product.Requests;
 
 namespace server.Api.Controllers
@@ -23,6 +24,7 @@ namespace server.Api.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> Create([FromBody] CreateProductRequest request)
         {
             var result = await _mediator.Send(request);
@@ -30,6 +32,7 @@ namespace server.Api.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateProductRequest request)
         {
             request.ProductID = id;
@@ -38,6 +41,7 @@ namespace server.Api.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> Delete(int id)
         {
             var result = await _mediator.Send(new DeleteProductRequest { ProductID = id });

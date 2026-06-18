@@ -28,17 +28,17 @@ const Waiter = () => {
 
   // Route protection
   useEffect(() => {
-    if (!isAuthenticated || (role !== 'Waiter' && role !== 'Admin')) {
+    if (!isAuthenticated || (role !== 'waiter' && role !== 'admin')) {
       navigate('/login');
     }
   }, [isAuthenticated, role, navigate]);
 
   // SignalR and data loading
   useEffect(() => {
-    if (isAuthenticated && (role === 'Waiter' || role === 'Admin')) {
+    if (isAuthenticated && (role === 'waiter' || role === 'admin')) {
       fetchTables();
       fetchActiveOrders();
-      connectSignalR('Waiter');
+      connectSignalR('waiter');
     }
     return () => {
       disconnectSignalR();

@@ -3,6 +3,7 @@ import Menu from './pages/Menu'
 import Login from './pages/Login'
 import Chef from './pages/Chef'
 import Waiter from './pages/Waiter'
+import Admin from './pages/Admin'
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/chef" element={<Chef />} />
         <Route path="/waiter" element={<Waiter />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
     </BrowserRouter>
   )

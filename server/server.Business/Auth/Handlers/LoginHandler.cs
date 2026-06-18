@@ -41,7 +41,7 @@ public class LoginHandler : IRequestHandler<LoginRequest, LoginModel>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Role, user.Role.ToString())
+                new Claim(ClaimTypes.Role, user.Role)
             }),
             Expires = DateTime.UtcNow.AddDays(1),
             Issuer = _configuration["Jwt:Issuer"],
@@ -56,7 +56,7 @@ public class LoginHandler : IRequestHandler<LoginRequest, LoginModel>
             IsSuccess = true,
             Message = "Giriş başarılı.",
             Token = tokenHandler.WriteToken(token),
-            Role = user.Role.ToString()
+            Role = user.Role
         };
     }
 }
