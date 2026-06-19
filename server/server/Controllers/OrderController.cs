@@ -46,5 +46,12 @@ namespace server.Api.Controllers
             var result = await _mediator.Send(new GetActiveOrdersRequest());
             return Ok(result);
         }
+
+        [HttpPost("pay-items")]
+        public async Task<IActionResult> PayItems([FromBody] PayOrderItemsRequest request)
+        {
+            var result = await _mediator.Send(request);
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
+        }
     }
 }

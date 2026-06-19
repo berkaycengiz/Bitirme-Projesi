@@ -7,6 +7,7 @@ export interface OrderDetailModel {
   productName: string;
   quantity: number;
   note: string | null;
+  unitPrice: number;
 }
 
 export interface ActiveOrderModel {
@@ -134,9 +135,10 @@ export const useOrderStore = create<OrderState>((set, get) => {
             totalAmount: newOrder.totalAmount,
             details: newOrder.details.map((d: any) => ({
               productId: d.productId,
-              productName: d.productName || 'Yemek', // productName might not be in event, but we'll fetch it or fall back
+              productName: d.productName || 'Yemek',
               quantity: d.quantity,
-              note: d.note
+              note: d.note,
+              unitPrice: d.unitPrice || 0
             }))
           };
 
@@ -162,6 +164,7 @@ export const useOrderStore = create<OrderState>((set, get) => {
 
         // Trigger refetch of products details if product names are missing in SignalR payload
         get().fetchActiveOrders();
+        get().fetchTables();
       });
 
       conn.on('OrderStatusChanged', (data) => {
@@ -180,23 +183,21 @@ export const useOrderStore = create<OrderState>((set, get) => {
           // Check if order is completed or cancelled
           const isFinished = newStatus === 'Completed' || newStatus === 'Cancelled';
           
-          // Filter out finished orders from activeOrders and deliveries
+          // Filter out finished orders from activeOrders
           const activeOrders = isFinished 
             ? updatedActive.filter(o => o.orderId !== orderId)
             : updatedActive;
 
-          // Manage Deliveries
+          // Manage Deliveries: only 'Ready' status stays in deliveries
           let deliveries = [...state.deliveries];
           if (newStatus === 'Ready') {
             const readyOrder = updatedActive.find(o => o.orderId === orderId);
             if (readyOrder && !deliveries.some(d => d.orderId === orderId)) {
               deliveries.push(readyOrder);
             }
-          } else if (isFinished) {
-            deliveries = deliveries.filter(d => d.orderId !== orderId);
           } else {
-            // Update status of delivery if it's there
-            deliveries = deliveries.map(d => d.orderId === orderId ? { ...d, status: newStatus } : d);
+            // If it becomes Completed, Served, or Cancelled, remove it from deliveries
+            deliveries = deliveries.filter(d => d.orderId !== orderId);
           }
 
           // Update Table active order status
@@ -205,10 +206,7 @@ export const useOrderStore = create<OrderState>((set, get) => {
               if (isFinished) {
                 return {
                   ...t,
-                  isOccupied: false,
-                  status: 'empty',
-                  activeOrderId: null,
-                  activeOrderTotalPrice: null
+                  activeOrderId: null
                 };
               } else {
                 return {
@@ -226,6 +224,10 @@ export const useOrderStore = create<OrderState>((set, get) => {
             tables: updatedTables
           };
         });
+
+        // Refetch database state to keep UI in sync
+        get().fetchTables();
+        get().fetchActiveOrders();
       });
 
       conn.on('ReceiveServiceRequest', (data) => {

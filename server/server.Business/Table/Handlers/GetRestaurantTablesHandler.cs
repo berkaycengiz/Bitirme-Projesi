@@ -25,10 +25,15 @@ public class GetRestaurantTablesHandler : IRequestHandler<GetRestaurantTablesReq
 
         return tables.Select(t =>
         {
-            var activeOrder = t.Orders
+            var activeOrders = t.Orders
                 .Where(o => o.Status != OrderStatus.Completed && o.Status != OrderStatus.Cancelled)
+                .ToList();
+
+            var latestActiveOrder = activeOrders
                 .OrderByDescending(o => o.OrderDate)
                 .FirstOrDefault();
+
+            decimal? sumPrice = activeOrders.Any() ? activeOrders.Sum(o => o.TotalPrice) : null;
 
             return new GetRestaurantTablesModel
             {
@@ -36,8 +41,8 @@ public class GetRestaurantTablesHandler : IRequestHandler<GetRestaurantTablesReq
                 TableNumber = t.TableNumber,
                 QrCode = t.QrCode,
                 IsOccupied = t.IsOccupied,
-                ActiveOrderId = activeOrder?.OrderID,
-                ActiveOrderTotalPrice = activeOrder?.TotalPrice
+                ActiveOrderId = latestActiveOrder?.OrderID,
+                ActiveOrderTotalPrice = sumPrice
             };
         }).ToList();
     }

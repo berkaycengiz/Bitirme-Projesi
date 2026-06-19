@@ -18,10 +18,11 @@ export interface CartItem {
 
 interface CartState {
   cartItems: CartItem[];
-  tableNumber: number;
-  setTableNumber: (tableNumber: number) => void;
+  tableNumber: number | null;
+  setTableNumber: (tableNumber: number | null) => void;
   addToCart: (product: Product, note?: string) => void;
   removeFromCart: (productID: number) => void;
+  updateCartItemNote: (productID: number, note: string) => void;
   clearCart: () => void;
   submitOrder: () => Promise<{ success: boolean; message: string }>;
 }
@@ -29,7 +30,8 @@ interface CartState {
 export const useCartStore = create<CartState>((set, get) => {
   // Parse table number from URL search parameters on load
   const params = new URLSearchParams(window.location.search);
-  const initialTable = parseInt(params.get('table') || '5', 10);
+  const tableParam = params.get('table');
+  const initialTable = tableParam ? parseInt(tableParam, 10) : null;
 
   return {
     cartItems: [],
@@ -76,6 +78,14 @@ export const useCartStore = create<CartState>((set, get) => {
         }
         return {};
       });
+    },
+
+    updateCartItemNote: (productID, note) => {
+      set((state) => ({
+        cartItems: state.cartItems.map((item) =>
+          item.product.productID === productID ? { ...item, note } : item
+        ),
+      }));
     },
 
     clearCart: () => set({ cartItems: [] }),

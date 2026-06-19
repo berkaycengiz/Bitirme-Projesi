@@ -98,8 +98,8 @@ const Chef = () => {
         <span>Çıkış Yap</span>
       </button>
 
-      <main className="flex-1 w-full max-w-[1600px] mx-auto">
-        <div className="px-5 md:px-8 py-6 mb-2">
+      <main className="flex-1 w-full max-w-7xl mx-auto">
+        <div className="px-5 md:px-10 py-6 mb-2">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <h1 className="text-3xl font-black tracking-tight text-gray-900 flex items-center gap-3">
@@ -121,7 +121,7 @@ const Chef = () => {
           </div>
         </div>
 
-        <div className="px-5 md:px-8">
+        <div className="px-5 md:px-10">
           {cookingOrders.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center">
               <div className="w-20 h-20 bg-primary/20 text-secondary rounded-full flex items-center justify-center mb-4">

@@ -1,4 +1,4 @@
-import { Search, Plus, Minus, ChevronRight, Flame, ClipboardEdit, CheckCircle } from 'lucide-react';
+import { Search, Plus, Minus, ChevronRight, Flame, ClipboardEdit, CheckCircle, QrCode } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Navbar from '../layouts/Navbar';
 import api from '../services/api';
@@ -19,15 +19,15 @@ const Menu = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
-  const [notes, setNotes] = useState<Record<number, string>>({}); // Temp state for notes per product
 
   // Zustand Store
-  const { cartItems, addToCart, removeFromCart, submitOrder, setTableNumber } = useCartStore();
+  const { cartItems, tableNumber, addToCart, removeFromCart, updateCartItemNote, submitOrder, setTableNumber } = useCartStore();
 
   // Read table number from URL query string on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const table = parseInt(params.get('table') || '5', 10);
+    const tableParam = params.get('table');
+    const table = tableParam ? parseInt(tableParam, 10) : null;
     setTableNumber(table);
   }, [setTableNumber]);
 
@@ -52,13 +52,8 @@ const Menu = () => {
     loadData();
   }, []);
 
-  const handleNoteChange = (productId: number, text: string) => {
-    setNotes(prev => ({ ...prev, [productId]: text }));
-  };
-
   const handleAddItem = (product: Product) => {
-    const note = notes[product.productID] || '';
-    addToCart(product, note);
+    addToCart(product);
   };
 
   const handleRemoveItem = (productID: number) => {
@@ -72,7 +67,6 @@ const Menu = () => {
 
     if (result.success) {
       setSuccessMsg(result.message);
-      setNotes({}); // Clear local notes input
       setTimeout(() => setSuccessMsg(''), 5000);
     } else {
       alert(result.message);
@@ -97,6 +91,77 @@ const Menu = () => {
 
   const totalItemsCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const totalCartPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+
+  if (tableNumber === null) {
+    return (
+      <div className="min-h-dvh bg-gradient-to-br from-[#FCF7DC]/30 to-white flex flex-col items-center justify-center p-6 relative font-display text-gray-800">
+        <div className="absolute top-10 left-10 text-2xl font-black tracking-tight text-secondary">
+          Akıllı<span className="text-gray-800">Restoran</span>
+        </div>
+        
+        {/* Animated gradients */}
+        <div className="absolute -top-1/4 -left-10 w-96 h-96 bg-primary/20 rounded-full blur-3xl pointer-events-none -z-10 md:scale-150 animate-pulse" />
+        <div className="absolute -bottom-1/4 -right-10 w-96 h-96 bg-secondary/10 rounded-full blur-3xl pointer-events-none -z-10 md:scale-150 animate-pulse" />
+
+        <div className="w-full max-w-md bg-white p-8 sm:p-10 rounded-[36px] shadow-2xl border border-gray-100 flex flex-col items-center gap-6 text-center animate-in fade-in zoom-in-95 duration-300">
+          
+          {/* Animated QR icon container */}
+          <div className="w-24 h-24 bg-primary/20 rounded-[32px] flex items-center justify-center rotate-6 relative group shadow-sm">
+            <QrCode size={48} className="text-secondary -rotate-6 group-hover:scale-110 transition-transform duration-300" strokeWidth={2} />
+            {/* QR Scanner Sweep Line Effect */}
+            <div className="absolute left-1/2 -translate-x-1/2 w-2/3 h-1 bg-secondary rounded-full animate-[bounce_2s_infinite] shadow-md shadow-secondary/50" />
+          </div>
+
+          <div className="flex flex-col gap-2 mt-2">
+            <h1 className="text-2xl sm:text-3xl font-black text-gray-800 tracking-tight leading-tight">
+              Masa QR Kodunu Okutun
+            </h1>
+            <p className="text-sm font-semibold text-gray-500 leading-relaxed px-2">
+              Sipariş verebilmek ve restoran menüsünü görüntülemek için lütfen masanızda bulunan QR kodu kameranızla okutun.
+            </p>
+          </div>
+
+          {/* Symmetrical divider */}
+          <div className="w-full flex items-center gap-3 my-2">
+            <div className="h-[1px] bg-gray-100 flex-1" />
+            <span className="text-[10px] uppercase font-black tracking-widest text-gray-400">veya</span>
+            <div className="h-[1px] bg-gray-100 flex-1" />
+          </div>
+
+          {/* Fallback input form for manual entry */}
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              const val = (e.currentTarget.elements.namedItem('manualTable') as HTMLInputElement).value;
+              const num = parseInt(val, 10);
+              if (num > 0) {
+                setTableNumber(num);
+                // Also update the URL parameter so that refresh works
+                const newUrl = `${window.location.origin}${window.location.pathname}?table=${num}`;
+                window.history.replaceState(null, '', newUrl);
+              }
+            }}
+            className="w-full flex gap-2"
+          >
+            <input
+              name="manualTable"
+              type="number"
+              placeholder="Masa No (Örn: 5)"
+              className="flex-1 px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:bg-white focus:border-secondary/30 focus:ring-4 focus:ring-secondary/10 shadow-inner text-sm font-bold text-gray-700 placeholder:text-gray-400 placeholder:font-medium"
+              required
+              min="1"
+            />
+            <button
+              type="submit"
+              className="bg-secondary hover:bg-hover active:scale-95 text-white px-6 py-3.5 rounded-2xl font-black text-sm tracking-wide transition-all shadow-md shrink-0"
+            >
+              Giriş Yap
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-dvh bg-background flex flex-col font-display text-gray-800 relative">
@@ -240,18 +305,22 @@ const Menu = () => {
                     </div>
 
                     {/* Dynamic Note Input if item in cart */}
-                    {quantity > 0 && (
-                      <div className="border-t border-gray-100 pt-3 flex gap-2 items-center animate-in slide-in-from-top-2 duration-250">
-                        <ClipboardEdit size={16} className="text-gray-400 shrink-0" />
-                        <input
-                          type="text"
-                          value={notes[item.productID] || ''}
-                          onChange={(e) => handleNoteChange(item.productID, e.target.value)}
-                          placeholder="Sipariş notu (ör: sossuz olsun)"
-                          className="flex-1 text-xs font-semibold bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 focus:outline-none focus:bg-white focus:border-secondary/30 text-gray-700"
-                        />
-                      </div>
-                    )}
+                    {quantity > 0 && (() => {
+                      const cartItem = cartItems.find((c) => c.product.productID === item.productID);
+                      const currentNote = cartItem ? cartItem.note : '';
+                      return (
+                        <div className="border-t border-gray-100 pt-3 flex gap-2 items-center animate-in slide-in-from-top-2 duration-250">
+                          <ClipboardEdit size={16} className="text-gray-400 shrink-0" />
+                          <input
+                            type="text"
+                            value={currentNote}
+                            onChange={(e) => updateCartItemNote(item.productID, e.target.value)}
+                            placeholder="Sipariş notu (ör: sossuz olsun)"
+                            className="flex-1 text-xs font-semibold bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 focus:outline-none focus:bg-white focus:border-secondary/30 text-gray-700"
+                          />
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}

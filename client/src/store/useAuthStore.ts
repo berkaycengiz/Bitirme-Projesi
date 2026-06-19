@@ -11,16 +11,21 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set) => {
-  // Read initial values from localStorage
+  // Read initial values from localStorage with protection against corrupt values
   const savedToken = localStorage.getItem('token');
+  const parsedToken = (savedToken && savedToken !== 'undefined' && savedToken !== 'null') ? savedToken : null;
+
   const savedRole = localStorage.getItem('role');
+  const parsedRole = (savedRole && savedRole !== 'undefined' && savedRole !== 'null') ? savedRole.toLowerCase() : null;
+
   const savedUsername = localStorage.getItem('username');
+  const parsedUsername = (savedUsername && savedUsername !== 'undefined' && savedUsername !== 'null') ? savedUsername : null;
 
   return {
-    token: savedToken,
-    role: savedRole,
-    username: savedUsername,
-    isAuthenticated: !!savedToken,
+    token: parsedToken,
+    role: parsedRole,
+    username: parsedUsername,
+    isAuthenticated: !!parsedToken,
 
     login: async (username, password) => {
       try {
@@ -28,13 +33,14 @@ export const useAuthStore = create<AuthState>((set) => {
         const data = response.data;
 
         if (data.isSuccess && data.token) {
+          const lowerRole = data.role.toLowerCase();
           localStorage.setItem('token', data.token);
-          localStorage.setItem('role', data.role);
+          localStorage.setItem('role', lowerRole);
           localStorage.setItem('username', username);
 
           set({
             token: data.token,
-            role: data.role,
+            role: lowerRole,
             username: username,
             isAuthenticated: true,
           });

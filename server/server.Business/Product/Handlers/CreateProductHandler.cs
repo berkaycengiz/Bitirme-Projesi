@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using server.Business.Product.Models;
 using server.Business.Product.Requests;
@@ -35,6 +35,7 @@ public class CreateProductHandler : IRequestHandler<CreateProductRequest, Create
         var newProduct = new server.Data.EF.Product
         {
             ProductName = request.ProductName,
+            Description = request.Description ?? string.Empty,
             Price = request.Price,
             ImageUrl = request.ImageUrl,
             CategoryID = request.CategoryID,

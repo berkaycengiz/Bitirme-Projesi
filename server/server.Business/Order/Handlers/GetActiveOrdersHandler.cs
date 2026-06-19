@@ -38,7 +38,8 @@ public class GetActiveOrdersHandler : IRequestHandler<GetActiveOrdersRequest, Li
                 ProductId = d.ProductID,
                 ProductName = d.Product != null ? d.Product.ProductName : "Bilinmeyen Ürün",
                 Quantity = d.Quantity,
-                Note = d.ProductNote
+                Note = d.ProductNote,
+                UnitPrice = d.UnitPrice
             }).ToList()
         }).ToList();
     }

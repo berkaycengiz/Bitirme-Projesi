@@ -5,7 +5,6 @@ import {
   Plus, 
   Trash2, 
   UserPlus, 
-  Settings, 
   QrCode, 
   LogOut, 
   Utensils, 
@@ -13,7 +12,8 @@ import {
   Users, 
   CheckCircle, 
   AlertTriangle,
-  Upload
+  Upload,
+  Edit
 } from 'lucide-react';
 import Navbar from '../layouts/Navbar';
 import api from '../services/api';
@@ -51,11 +51,7 @@ const Admin = () => {
   }, [isAuthenticated, role, navigate]);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'users' | 'tables' | 'settings'>('products');
-
-  // Cloudinary Settings State (with defaults)
-  const [cloudName, setCloudName] = useState(() => localStorage.getItem('cloudinary_cloud_name') || 'dqv9m8cjg');
-  const [uploadPreset, setUploadPreset] = useState(() => localStorage.getItem('cloudinary_upload_preset') || 'preset_restaurant');
+  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'users' | 'tables'>('products');
 
   // API Lists State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -69,10 +65,23 @@ const Admin = () => {
 
   // Forms State
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
-  const [productForm, setProductForm] = useState({ name: '', price: '', categoryId: '', imageUrl: '' });
+  const [productForm, setProductForm] = useState({ name: '', price: '', categoryId: '', imageUrl: '', description: '' });
   const [userForm, setUserForm] = useState({ username: '', password: '', role: 'waiter' });
+  const [addTableForm, setAddTableForm] = useState({ tableNumber: '', qrCode: '' });
+  const [tableForm, setTableForm] = useState({ tableNumber: '', qrCode: '' });
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit States
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingTable, setEditingTable] = useState<TableInfo | null>(null);
+  const [editingUser, setEditingUser] = useState<StaffUser | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+
+  // Edit Forms State
+  const [editProductForm, setEditProductForm] = useState({ name: '', price: '', categoryId: '', imageUrl: '', description: '' });
+  const [editUserForm, setEditUserForm] = useState({ username: '', password: '', role: 'waiter' });
+  const [editCategoryForm, setEditCategoryForm] = useState({ name: '', description: '' });
 
   const showAlert = (type: 'success' | 'error', message: string) => {
     setAlert({ type, message });
@@ -106,40 +115,36 @@ const Admin = () => {
     }
   }, [isAuthenticated, role]);
 
-  // Save Cloudinary settings to localStorage
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    localStorage.setItem('cloudinary_cloud_name', cloudName);
-    localStorage.setItem('cloudinary_upload_preset', uploadPreset);
-    showAlert('success', 'Cloudinary ayarları başarıyla kaydedildi.');
-  };
-
-  // Image upload handler
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image upload handler using our backend secure upload endpoint
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', uploadPreset);
 
     try {
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-        { method: 'POST', body: formData }
-      );
-      const data = await response.json();
+      const response = await api.post('/api/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
 
-      if (data.secure_url) {
-        setProductForm(prev => ({ ...prev, imageUrl: data.secure_url }));
+      if (response.data && response.data.isSuccess && response.data.url) {
+        if (isEdit) {
+          setEditProductForm(prev => ({ ...prev, imageUrl: response.data.url }));
+        } else {
+          setProductForm(prev => ({ ...prev, imageUrl: response.data.url }));
+        }
         showAlert('success', 'Resim başarıyla yüklendi.');
       } else {
-        showAlert('error', 'Görsel yüklenemedi. Cloudinary ayarlarınızı kontrol edin.');
+        showAlert('error', response.data?.message || 'Görsel yüklenemedi.');
       }
-    } catch (err) {
-      console.error('Cloudinary upload error:', err);
-      showAlert('error', 'Görsel yüklenirken bir hata oluştu.');
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      const msg = err.response?.data?.message || 'Görsel yüklenirken bir hata oluştu.';
+      showAlert('error', msg);
     } finally {
       setIsUploading(false);
     }
@@ -179,7 +184,65 @@ const Admin = () => {
     }
   };
 
-  // Product Submit
+  // Category Edit Actions
+  const startCategoryEdit = (category: Category) => {
+    setEditingCategory(category);
+    setEditCategoryForm({
+      name: category.categoryName,
+      description: category.description || ''
+    });
+  };
+
+  const cancelCategoryEdit = () => {
+    setEditingCategory(null);
+    setEditCategoryForm({ name: '', description: '' });
+  };
+
+  const handleEditCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+    setIsSubmitting(true);
+    try {
+      const response = await api.put(`/api/category/${editingCategory.categoryID}`, {
+        categoryID: editingCategory.categoryID,
+        categoryName: editCategoryForm.name,
+        description: editCategoryForm.description
+      });
+      if (response.status === 200 || response.status === 204 || response.data?.isSuccess) {
+        showAlert('success', 'Kategori başarıyla güncellendi.');
+        cancelCategoryEdit();
+        loadData();
+      } else {
+        showAlert('error', response.data?.message || 'Kategori güncellenemedi.');
+      }
+    } catch (err: any) {
+      console.error('Category update error:', err);
+      const msg = err.response?.data || err.response?.data?.message || 'İşlem sırasında bir hata oluştu.';
+      showAlert('error', typeof msg === 'string' ? msg : 'Kategori güncellenemedi.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Product Start Edit
+  const startProductEdit = (product: Product) => {
+    setEditingProduct(product);
+    const cat = categories.find(c => c.categoryName === product.categoryName);
+    setEditProductForm({
+      name: product.productName,
+      price: product.price.toString(),
+      categoryId: cat ? cat.categoryID.toString() : '',
+      imageUrl: product.imageUrl,
+      description: product.description || ''
+    });
+  };
+
+  const cancelProductEdit = () => {
+    setEditingProduct(null);
+    setEditProductForm({ name: '', price: '', categoryId: '', imageUrl: '', description: '' });
+  };
+
+  // Product Submit (Add only)
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productForm.categoryId) {
@@ -192,17 +255,51 @@ const Admin = () => {
         productName: productForm.name,
         price: parseFloat(productForm.price),
         imageUrl: productForm.imageUrl,
-        categoryID: parseInt(productForm.categoryId, 10)
+        categoryID: parseInt(productForm.categoryId, 10),
+        description: productForm.description
       });
       if (response.data.isSuccess) {
         showAlert('success', 'Ürün başarıyla eklendi.');
-        setProductForm({ name: '', price: '', categoryId: '', imageUrl: '' });
+        setProductForm({ name: '', price: '', categoryId: '', imageUrl: '', description: '' });
         loadData();
       } else {
         showAlert('error', response.data.message);
       }
     } catch (err: any) {
-      showAlert('error', 'Ürün eklenirken bir hata oluştu.');
+      showAlert('error', 'İşlem sırasında bir hata oluştu.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Product Edit Submit
+  const handleEditProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    if (!editProductForm.categoryId) {
+      showAlert('error', 'Lütfen bir kategori seçin.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const response = await api.put(`/api/product/${editingProduct.productID}`, {
+        productID: editingProduct.productID,
+        productName: editProductForm.name,
+        price: parseFloat(editProductForm.price),
+        imageUrl: editProductForm.imageUrl,
+        categoryID: parseInt(editProductForm.categoryId, 10),
+        description: editProductForm.description,
+        isAvailable: true
+      });
+      if (response.data.isSuccess) {
+        showAlert('success', 'Ürün başarıyla güncellendi.');
+        cancelProductEdit();
+        loadData();
+      } else {
+        showAlert('error', response.data.message);
+      }
+    } catch (err: any) {
+      showAlert('error', 'İşlem sırasında bir hata oluştu.');
     } finally {
       setIsSubmitting(false);
     }
@@ -224,7 +321,84 @@ const Admin = () => {
     }
   };
 
-  // User Submit
+  // Table Helpers
+  const startTableEdit = (table: TableInfo) => {
+    setEditingTable(table);
+    setTableForm({
+      tableNumber: table.tableNumber.toString(),
+      qrCode: table.qrCode
+    });
+  };
+
+  const cancelTableEdit = () => {
+    setEditingTable(null);
+    setTableForm({ tableNumber: '', qrCode: '' });
+  };
+
+  // Table Submit (Add/Edit)
+  const handleTableSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      if (editingTable) {
+        // Edit Table
+        const tableNumVal = parseInt(tableForm.tableNumber, 10);
+        const qrCodeUrl = `${window.location.origin}/?table=${tableNumVal}`;
+        const response = await api.put(`/api/table/${editingTable.tableID}`, {
+          tableNumber: tableNumVal,
+          qrCode: qrCodeUrl
+        });
+        if (response.status === 200 || response.status === 204 || response.data?.isSuccess) {
+          showAlert('success', 'Masa başarıyla güncellendi.');
+          setTableForm({ tableNumber: '', qrCode: '' });
+          setEditingTable(null);
+          loadData();
+        } else {
+          showAlert('error', response.data?.message || 'Masa güncellenemedi.');
+        }
+      } else {
+        // Add Table
+        const tableNumVal = parseInt(addTableForm.tableNumber, 10);
+        const qrCodeUrl = `${window.location.origin}/?table=${tableNumVal}`;
+        const response = await api.post('/api/table', {
+          tableNumber: tableNumVal,
+          qrCode: qrCodeUrl
+        });
+        if (response.status === 200 || response.status === 201 || response.data?.isSuccess) {
+          showAlert('success', 'Masa başarıyla eklendi.');
+          setAddTableForm({ tableNumber: '', qrCode: '' });
+          loadData();
+        } else {
+          showAlert('error', response.data?.message || 'Masa eklenemedi.');
+        }
+      }
+    } catch (err: any) {
+      console.error('Table submit error:', err);
+      const msg = err.response?.data || err.response?.data?.message || 'İşlem sırasında bir hata oluştu.';
+      showAlert('error', typeof msg === 'string' ? msg : 'Masa kaydedilemedi.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Table Delete
+  const handleTableDelete = async (id: number) => {
+    if (!window.confirm('Bu masayı silmek istediğinize emin misiniz?')) return;
+    try {
+      const response = await api.delete(`/api/table/${id}`);
+      if (response.status === 200 || response.status === 204 || response.data?.isSuccess) {
+        showAlert('success', 'Masa başarıyla silindi.');
+        loadData();
+      } else {
+        showAlert('error', response.data?.message || 'Masa silinemedi.');
+      }
+    } catch (err: any) {
+      console.error('Table delete error:', err);
+      showAlert('error', 'Masa silinemedi (Masaya ait siparişler olabilir).');
+    }
+  };
+
+  // User Submit (Add only)
   const handleUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -243,6 +417,47 @@ const Admin = () => {
       }
     } catch (err: any) {
       showAlert('error', 'Kullanıcı eklenirken bir hata oluştu.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // User Edit Actions
+  const startUserEdit = (user: StaffUser) => {
+    setEditingUser(user);
+    setEditUserForm({
+      username: user.username,
+      password: '', // blank by default, only updated if filled
+      role: user.role
+    });
+  };
+
+  const cancelUserEdit = () => {
+    setEditingUser(null);
+    setEditUserForm({ username: '', password: '', role: 'waiter' });
+  };
+
+  const handleEditUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setIsSubmitting(true);
+    try {
+      const response = await api.put(`/api/user/${editingUser.id}`, {
+        username: editUserForm.username,
+        password: editUserForm.password || null,
+        role: editUserForm.role
+      });
+      if (response.data.isSuccess) {
+        showAlert('success', 'Personel başarıyla güncellendi.');
+        cancelUserEdit();
+        loadData();
+      } else {
+        showAlert('error', response.data.message);
+      }
+    } catch (err: any) {
+      console.error('User update error:', err);
+      const msg = err.response?.data?.message || err.response?.data || 'Personel güncellenirken bir hata oluştu.';
+      showAlert('error', typeof msg === 'string' ? msg : 'Personel güncellenemedi.');
     } finally {
       setIsSubmitting(false);
     }
@@ -293,52 +508,45 @@ const Admin = () => {
       )}
 
       {/* Header Tabs */}
-      <div className="bg-white px-5 md:px-10 py-4 border-b border-gray-100 flex gap-3 overflow-x-auto scrollbar-hide sticky top-16 z-30">
-        <button 
-          onClick={() => setActiveTab('products')}
-          className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'products' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-          }`}
-        >
-          <Utensils size={18} />
-          Yemek Yönetimi
-        </button>
-        <button 
-          onClick={() => setActiveTab('categories')}
-          className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'categories' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-          }`}
-        >
-          <Tags size={18} />
-          Kategoriler
-        </button>
-        <button 
-          onClick={() => setActiveTab('users')}
-          className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'users' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-          }`}
-        >
-          <Users size={18} />
-          Personel Yönetimi
-        </button>
-        <button 
-          onClick={() => setActiveTab('tables')}
-          className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'tables' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-          }`}
-        >
-          <QrCode size={18} />
-          Masa QR Kodları
-        </button>
-        <button 
-          onClick={() => setActiveTab('settings')}
-          className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === 'settings' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-          }`}
-        >
-          <Settings size={18} />
-          Ayarlar
-        </button>
+      <div className="bg-white border-b border-gray-100 sticky top-16 z-30">
+        <div className="w-full max-w-7xl mx-auto px-5 md:px-10 py-4 flex gap-3 overflow-x-auto scrollbar-hide">
+          <button 
+            onClick={() => setActiveTab('products')}
+            className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'products' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            <Utensils size={18} />
+            Yemek Yönetimi
+          </button>
+          <button 
+            onClick={() => setActiveTab('categories')}
+            className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'categories' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            <Tags size={18} />
+            Kategoriler
+          </button>
+          <button 
+            onClick={() => setActiveTab('users')}
+            className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'users' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            <Users size={18} />
+            Personel Yönetimi
+          </button>
+          <button 
+            onClick={() => setActiveTab('tables')}
+            className={`px-5 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'tables' ? 'bg-secondary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            <QrCode size={18} />
+            Masa QR Kodları
+          </button>
+        </div>
       </div>
 
       <main className="flex-1 w-full max-w-7xl mx-auto mt-6 px-5 md:px-10">
@@ -400,6 +608,18 @@ const Admin = () => {
                       </select>
                     </div>
 
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-black text-gray-700 ml-1">Açıklama</label>
+                      <textarea
+                        value={productForm.description}
+                        onChange={e => setProductForm(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Örn: Leziz dana kıyma ve özel baharatlar."
+                        rows={3}
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                        required
+                      />
+                    </div>
+
                     {/* Cloudinary Image Upload */}
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-black text-gray-700 ml-1">Görsel Yükle</label>
@@ -407,7 +627,7 @@ const Admin = () => {
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={handleImageUpload}
+                          onChange={e => handleImageUpload(e, false)}
                           id="file-upload"
                           className="hidden"
                           disabled={isUploading}
@@ -427,13 +647,15 @@ const Admin = () => {
                       )}
                     </div>
 
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || isUploading}
-                      className="w-full bg-secondary text-white py-3 mt-2 rounded-2xl font-black text-sm tracking-wide shadow-md hover:bg-hover active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      {isSubmitting ? 'Ekleniyor...' : 'Yemeği Kaydet'}
-                    </button>
+                    <div className="flex gap-2.5 mt-2">
+                      <button
+                        type="submit"
+                        disabled={isSubmitting || isUploading}
+                        className="flex-1 bg-secondary text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md hover:bg-hover active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {isSubmitting ? 'Kaydediliyor...' : 'Yemeği Kaydet'}
+                      </button>
+                    </div>
                   </form>
                 </div>
 
@@ -458,13 +680,22 @@ const Admin = () => {
                             <p className="text-xs font-black text-secondary mt-0.5">₺{p.price}</p>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleProductDelete(p.productID)}
-                          className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
-                          title="Sil"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => startProductEdit(p)}
+                            className="p-2.5 text-blue-500 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
+                            title="Düzenle"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleProductDelete(p.productID)}
+                            className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
+                            title="Sil"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -529,13 +760,22 @@ const Admin = () => {
                           <h4 className="font-extrabold text-base text-gray-900">{c.categoryName}</h4>
                           <p className="text-xs font-medium text-gray-400 mt-1 leading-relaxed">{c.description}</p>
                         </div>
-                        <button
-                          onClick={() => handleCategoryDelete(c.categoryID)}
-                          className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
-                          title="Sil"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => startCategoryEdit(c)}
+                            className="p-2.5 text-blue-500 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
+                            title="Düzenle"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleCategoryDelete(c.categoryID)}
+                            className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
+                            title="Sil"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -605,7 +845,7 @@ const Admin = () => {
                 <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                   <h3 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2">
                     <Users className="text-secondary" />
-                    Kayıtlı Personel ({staffUsers.length})
+                    Kayılı Personel ({staffUsers.length})
                   </h3>
                   <div className="flex flex-col gap-3">
                     {staffUsers.map(u => (
@@ -620,13 +860,22 @@ const Admin = () => {
                             {u.role}
                           </span>
                         </div>
-                        <button
-                          onClick={() => handleUserDelete(u.id)}
-                          className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
-                          title="Sil"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => startUserEdit(u)}
+                            className="p-2.5 text-blue-500 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
+                            title="Düzenle"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleUserDelete(u.id)}
+                            className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
+                            title="Sil"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -636,92 +885,373 @@ const Admin = () => {
 
             {/* Tables Tab */}
             {activeTab === 'tables' && (
-              <div className="lg:col-span-3 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
-                  <QrCode className="text-secondary" />
-                  Masa QR Kodları ve Linkleri
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {tables.map(t => {
-                    const tableName = t.tableNumber === 8 ? 'Bahçe 01' : t.tableNumber === 9 ? 'Bahçe 02' : `Masa 0${t.tableNumber}`;
-                    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(t.qrCode)}`;
-                    return (
-                      <div key={t.tableID} className="p-5 border border-gray-100 hover:border-gray-250 rounded-3xl flex flex-col items-center gap-4 transition-all shadow-sm">
-                        <div className="text-center">
-                          <h4 className="font-black text-lg text-gray-900">{tableName}</h4>
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider mt-1 ${
-                            t.isOccupied ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-                          }`}>
-                            {t.isOccupied ? 'Dolu' : 'Boş'}
-                          </span>
-                        </div>
-                        
-                        {/* Render QR code */}
-                        <div className="w-44 h-44 border border-gray-100 rounded-2xl overflow-hidden p-2 bg-white flex items-center justify-center">
-                          <img src={qrUrl} alt={`${tableName} QR Code`} className="w-full h-full object-contain" />
-                        </div>
+              <>
+                {/* Table Form (Only Add Table) */}
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col gap-4">
+                  <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                    <Plus className="text-secondary" />
+                    Yeni Masa Ekle
+                  </h3>
+                  <form onSubmit={handleTableSubmit} className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-black text-gray-700 ml-1">Masa Numarası</label>
+                      <input
+                        type="number"
+                        value={addTableForm.tableNumber}
+                        onChange={e => setAddTableForm(prev => ({ ...prev, tableNumber: e.target.value }))}
+                        placeholder="Örn: 5"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                        required
+                      />
+                    </div>
 
-                        <div className="w-full text-center">
-                          <p className="text-[10px] font-mono text-gray-400 break-all select-all select-none p-1.5 bg-gray-50 border border-gray-100 rounded-xl font-bold">
-                            {t.qrCode}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
+                    {/* QR Code link generated automatically based on table number */}
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full bg-secondary text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md hover:bg-hover active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Kaydediliyor...' : 'Masayı Kaydet'}
+                    </button>
+                  </form>
                 </div>
-              </div>
+
+                {/* Tables List */}
+                <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                    <QrCode className="text-secondary" />
+                    Masa QR Kodları ve Linkleri ({tables.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {tables.map(t => {
+                      const tableName = `Masa ${t.tableNumber < 10 ? '0' + t.tableNumber : t.tableNumber}`;
+                      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(t.qrCode)}`;
+                      return (
+                        <div key={t.tableID} className="p-5 border border-gray-100 hover:border-gray-250 rounded-3xl flex flex-col items-center gap-4 transition-all shadow-sm relative group">
+                          {/* Edit / Delete Buttons overlay */}
+                          <div className="absolute top-3 right-3 flex gap-1 bg-white/80 backdrop-blur-sm p-1 rounded-2xl shadow-sm border border-gray-100/50">
+                            <button
+                              onClick={() => startTableEdit(t)}
+                              className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
+                              title="Düzenle"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleTableDelete(t.tableID)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
+                              title="Sil"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+
+                          <div className="text-center mt-2">
+                            <h4 className="font-black text-lg text-gray-900">{tableName}</h4>
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider mt-1 ${
+                              t.isOccupied ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                            }`}>
+                              {t.isOccupied ? 'Dolu' : 'Boş'}
+                            </span>
+                          </div>
+                          
+                          {/* Render QR code */}
+                          <div className="w-36 h-36 border border-gray-100 rounded-2xl overflow-hidden p-2 bg-white flex items-center justify-center">
+                            <img src={qrUrl} alt={`${tableName} QR Code`} className="w-full h-full object-contain" />
+                          </div>
+
+                          <div className="w-full text-center">
+                            <p className="text-[10px] font-mono text-gray-400 break-all select-all select-none p-1.5 bg-gray-50 border border-gray-100 rounded-xl font-bold">
+                              {t.qrCode}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
             )}
 
-            {/* Settings Tab */}
-            {activeTab === 'settings' && (
-              <div className="lg:col-span-3 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm max-w-xl">
-                <h3 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2">
-                  <Settings className="text-secondary" />
-                  Cloudinary Upload Yapılandırması
-                </h3>
-                <p className="text-xs text-gray-500 font-semibold mb-6 leading-relaxed">
-                  Admin panelinden yeni yemek eklerken seçtiğiniz görsellerin sunuculara yüklenebilmesi için geçerli bir Cloudinary hesabı girmeniz gerekir. 
-                  Aşağıdaki test ayarlarını varsayılan olarak kullanabilir veya kendi bilgilerinizi girebilirsiniz.
-                </p>
-                <form onSubmit={handleSaveSettings} className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-black text-gray-700 ml-1">Cloud Name</label>
-                    <input
-                      type="text"
-                      value={cloudName}
-                      onChange={e => setCloudName(e.target.value)}
-                      placeholder="Cloud Name girin"
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold font-mono"
-                      required
-                    />
-                  </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-black text-gray-700 ml-1">Upload Preset (Unsigned)</label>
-                    <input
-                      type="text"
-                      value={uploadPreset}
-                      onChange={e => setUploadPreset(e.target.value)}
-                      placeholder="Upload Preset girin"
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold font-mono"
-                      required
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full bg-secondary text-white py-3.5 mt-2 rounded-2xl font-black text-sm tracking-wide shadow-md hover:bg-hover active:scale-95 transition-all"
-                  >
-                    Ayarları Kaydet
-                  </button>
-                </form>
-              </div>
-            )}
 
           </div>
         )}
       </main>
+
+      {editingTable && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm border border-gray-100 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col gap-4">
+            <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+              <Edit className="text-secondary" />
+              Masayı Düzenle
+            </h3>
+            
+            <form onSubmit={handleTableSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Masa Numarası</label>
+                <input
+                  type="number"
+                  value={tableForm.tableNumber}
+                  onChange={e => setTableForm(prev => ({ ...prev, tableNumber: e.target.value }))}
+                  placeholder="Örn: 5"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                  required
+                />
+              </div>
+
+              {/* QR Code link generated automatically based on table number */}
+
+              <div className="flex gap-2.5 mt-2">
+                <button
+                  type="button"
+                  onClick={cancelTableEdit}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-2xl font-black text-sm tracking-wide active:scale-95 transition-all"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-secondary text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md hover:bg-hover active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Kaydediliyor...' : 'Masayı Güncelle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md border border-gray-100 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col gap-4 max-h-[90dvh] overflow-y-auto">
+            <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+              <Edit className="text-secondary" />
+              Yemeği Düzenle
+            </h3>
+            <form onSubmit={handleEditProductSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Yemek Adı</label>
+                <input
+                  type="text"
+                  value={editProductForm.name}
+                  onChange={e => setEditProductForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Örn: Kebap"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Fiyat (₺)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editProductForm.price}
+                  onChange={e => setEditProductForm(prev => ({ ...prev, price: e.target.value }))}
+                  placeholder="Örn: 250"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Kategori</label>
+                <select
+                  value={editProductForm.categoryId}
+                  onChange={e => setEditProductForm(prev => ({ ...prev, categoryId: e.target.value }))}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold text-gray-700"
+                  required
+                >
+                  <option value="">Seçin...</option>
+                  {categories.map(c => (
+                    <option key={c.categoryID} value={c.categoryID}>{c.categoryName}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Açıklama</label>
+                <textarea
+                  value={editProductForm.description}
+                  onChange={e => setEditProductForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Örn: Leziz dana kıyma ve özel baharatlar."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                  required
+                />
+              </div>
+
+              {/* Cloudinary Image Upload for Edit */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Görsel Değiştir</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => handleImageUpload(e, true)}
+                    id="edit-file-upload"
+                    className="hidden"
+                    disabled={isUploading}
+                  />
+                  <label 
+                    htmlFor="edit-file-upload"
+                    className="w-full border-2 border-dashed border-gray-200 hover:border-secondary/30 rounded-xl py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-gray-50 hover:bg-white transition-all text-xs font-extrabold text-gray-500"
+                  >
+                    <Upload size={20} className={isUploading ? 'animate-bounce text-secondary' : 'text-gray-400'} />
+                    {isUploading ? 'Yükleniyor...' : 'Görsel Seç'}
+                  </label>
+                </div>
+                {editProductForm.imageUrl && (
+                  <div className="mt-2 relative rounded-2xl overflow-hidden h-24 border border-gray-100">
+                    <img src={editProductForm.imageUrl} className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2.5 mt-2">
+                <button
+                  type="button"
+                  onClick={cancelProductEdit}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-2xl font-black text-sm tracking-wide active:scale-95 transition-all"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isUploading}
+                  className="flex-1 bg-secondary text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md hover:bg-hover active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Kaydediliyor...' : 'Yemeği Güncelle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm border border-gray-100 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col gap-4">
+            <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+              <Edit className="text-secondary" />
+              Personel Düzenle
+            </h3>
+            
+            <form onSubmit={handleEditUserSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Kullanıcı Adı</label>
+                <input
+                  type="text"
+                  value={editUserForm.username}
+                  onChange={e => setEditUserForm(prev => ({ ...prev, username: e.target.value }))}
+                  placeholder="Kullanıcı adı"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Yeni Şifre (İsteğe Bağlı)</label>
+                <input
+                  type="password"
+                  value={editUserForm.password}
+                  onChange={e => setEditUserForm(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="Değiştirmek istemiyorsanız boş bırakın"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Rol</label>
+                <select
+                  value={editUserForm.role}
+                  onChange={e => setEditUserForm(prev => ({ ...prev, role: e.target.value }))}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold text-gray-700"
+                  required
+                >
+                  <option value="waiter">Garson (waiter)</option>
+                  <option value="chef">Aşçı (chef)</option>
+                  <option value="admin">Yönetici (admin)</option>
+                </select>
+              </div>
+
+              <div className="flex gap-2.5 mt-2">
+                <button
+                  type="button"
+                  onClick={cancelUserEdit}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-2xl font-black text-sm tracking-wide active:scale-95 transition-all"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-secondary text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md hover:bg-hover active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Kaydediliyor...' : 'Personeli Güncelle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingCategory && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm border border-gray-100 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col gap-4">
+            <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+              <Edit className="text-secondary" />
+              Kategoriyi Düzenle
+            </h3>
+            
+            <form onSubmit={handleEditCategorySubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Kategori Adı</label>
+                <input
+                  type="text"
+                  value={editCategoryForm.name}
+                  onChange={e => setEditCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Örn: Ara Sıcaklar"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700 ml-1">Açıklama</label>
+                <textarea
+                  value={editCategoryForm.description}
+                  onChange={e => setEditCategoryForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Örn: Lezzetli ara sıcaklarımız."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:bg-white focus:border-secondary/30 text-sm font-bold"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-2.5 mt-2">
+                <button
+                  type="button"
+                  onClick={cancelCategoryEdit}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-2xl font-black text-sm tracking-wide active:scale-95 transition-all"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-secondary text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md hover:bg-hover active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Kaydediliyor...' : 'Kategoriyi Güncelle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

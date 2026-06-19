@@ -17,6 +17,8 @@ const Login = () => {
     if (isAuthenticated && role) {
       if (role === 'chef') {
         navigate('/chef');
+      } else if (role === 'admin') {
+        navigate('/admin');
       } else {
         navigate('/waiter');
       }

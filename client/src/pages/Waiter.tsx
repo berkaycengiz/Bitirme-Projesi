@@ -4,17 +4,27 @@ import { LayoutGrid, ClipboardCheck, ArrowRight, BellRing, LogOut, Coffee } from
 import Navbar from '../layouts/Navbar';
 import { useAuthStore } from '../store/useAuthStore';
 import { useOrderStore } from '../store/useOrderStore';
-import type { TableModel } from '../store/useOrderStore';
+import type { TableModel, ActiveOrderModel, OrderDetailModel } from '../store/useOrderStore';
+import api from '../services/api';
+
+interface AggregatedItem {
+  productId: number;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+}
 
 const Waiter = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'tables' | 'deliveries'>('tables');
   const [selectedTable, setSelectedTable] = useState<TableModel | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [selectedItemsToPay, setSelectedItemsToPay] = useState<Record<number, number>>({});
 
   const { isAuthenticated, role, logout } = useAuthStore();
   const { 
     tables, 
+    activeOrders,
     deliveries, 
     serviceRequests,
     dismissServiceRequest,
@@ -47,12 +57,19 @@ const Waiter = () => {
 
   const handleTableClick = (table: TableModel) => {
     setSelectedTable(table);
+    setSelectedItemsToPay({});
+  };
+
+  const handleCloseModal = () => {
+    setSelectedTable(null);
+    setSelectedItemsToPay({});
   };
 
   const handleToggleOccupied = async (table: TableModel) => {
     setActionLoading(true);
     await updateTableStatus(table.tableNumber, !table.isOccupied);
     setSelectedTable(null);
+    setSelectedItemsToPay({});
     setActionLoading(false);
     // Refresh tables list
     fetchTables();
@@ -69,6 +86,7 @@ const Waiter = () => {
     await updateTableStatus(table.tableNumber, false);
     
     setSelectedTable(null);
+    setSelectedItemsToPay({});
     setActionLoading(false);
     
     // Refresh
@@ -77,8 +95,8 @@ const Waiter = () => {
   };
 
   const handleDeliverOrder = async (orderId: number) => {
-    // Delivery complete means status becomes Completed (3)
-    await updateOrderStatus(orderId, 3);
+    // Delivery complete means status becomes Served (5)
+    await updateOrderStatus(orderId, 5);
   };
 
   const handleLogout = () => {
@@ -86,11 +104,73 @@ const Waiter = () => {
     navigate('/login');
   };
 
-  // Format table name visually (e.g. TableNumber = 8 -> Bahçe 01, 9 -> Bahçe 02, etc.)
+  const handleIncrement = (productId: number, maxQty: number) => {
+    setSelectedItemsToPay(prev => {
+      const current = prev[productId] || 0;
+      if (current < maxQty) {
+        return { ...prev, [productId]: current + 1 };
+      }
+      return prev;
+    });
+  };
+
+  const handleDecrement = (productId: number) => {
+    setSelectedItemsToPay(prev => {
+      const current = prev[productId] || 0;
+      if (current > 0) {
+        const updated = { ...prev, [productId]: current - 1 };
+        if (updated[productId] === 0) {
+          delete updated[productId];
+        }
+        return updated;
+      }
+      return prev;
+    });
+  };
+
+  const handlePaySelectedItems = async () => {
+    if (!selectedTable) return;
+
+    const items = Object.entries(selectedItemsToPay)
+      .map(([productIdStr, quantity]) => ({
+        productId: parseInt(productIdStr, 10),
+        quantity
+      }))
+      .filter(item => item.quantity > 0);
+
+    if (items.length === 0) return;
+
+    setActionLoading(true);
+    try {
+      const response = await api.post('/api/order/pay-items', {
+        tableNumber: selectedTable.tableNumber,
+        items
+      });
+
+      if (response.data.isSuccess) {
+        setSelectedItemsToPay({});
+        await fetchTables();
+        await fetchActiveOrders();
+
+        // Check if the table became empty/unoccupied
+        const updatedTable = useOrderStore.getState().tables.find(t => t.tableNumber === selectedTable.tableNumber);
+        if (!updatedTable || !updatedTable.isOccupied) {
+          setSelectedTable(null);
+        }
+      } else {
+        alert(response.data.message || 'Ödeme başarısız.');
+      }
+    } catch (error: any) {
+      console.error('Ödeme hatası:', error);
+      alert(error.response?.data?.message || 'Ödeme sırasında bir hata oluştu.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Format table name visually (e.g. TableNumber = 8 -> Masa 08, 10 -> Masa 10, etc.)
   const formatTableName = (num: number) => {
-    if (num === 8) return 'Bahçe 01';
-    if (num === 9) return 'Bahçe 02';
-    return `Masa 0${num}`;
+    return num < 10 ? `Masa 0${num}` : `Masa ${num}`;
   };
 
   return (
@@ -107,37 +187,39 @@ const Waiter = () => {
       </button>
 
       {/* Header Tabs */}
-      <div className="bg-white px-5 md:px-10 py-4 border-b border-gray-100 flex gap-4 sticky top-16 z-30">
-        <button 
-          onClick={() => { setActiveTab('tables'); setSelectedTable(null); }}
-          className={`px-6 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 ${
-            activeTab === 'tables' 
-              ? 'bg-secondary text-white shadow-lg shadow-secondary/30' 
-              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-          }`}
-        >
-          <LayoutGrid size={18} />
-          Masa Düzeni
-        </button>
-        <button 
-          onClick={() => { setActiveTab('deliveries'); setSelectedTable(null); }}
-          className={`px-6 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 relative ${
-            activeTab === 'deliveries' 
-              ? 'bg-secondary text-white shadow-lg shadow-secondary/30' 
-              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-          }`}
-        >
-          <ClipboardCheck size={18} />
-          Hazır Teslimatlar
-          {deliveries.length > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[9px] text-white items-center justify-center p-2 font-black">
-                {deliveries.length}
+      <div className="bg-white border-b border-gray-100 sticky top-16 z-30">
+        <div className="w-full max-w-7xl mx-auto px-5 md:px-10 py-4 flex gap-4">
+          <button 
+            onClick={() => { setActiveTab('tables'); setSelectedTable(null); }}
+            className={`px-6 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 ${
+              activeTab === 'tables' 
+                ? 'bg-secondary text-white shadow-lg shadow-secondary/30' 
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            <LayoutGrid size={18} />
+            Masa Düzeni
+          </button>
+          <button 
+            onClick={() => { setActiveTab('deliveries'); setSelectedTable(null); }}
+            className={`px-6 py-2.5 rounded-2xl font-black text-sm transition-all flex items-center gap-2 relative ${
+              activeTab === 'deliveries' 
+                ? 'bg-secondary text-white shadow-lg shadow-secondary/30' 
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            <ClipboardCheck size={18} />
+            Hazır Teslimatlar
+            {deliveries.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[9px] text-white items-center justify-center p-2 font-black">
+                  {deliveries.length}
+                </span>
               </span>
-            </span>
-          )}
-        </button>
+            )}
+          </button>
+        </div>
       </div>
 
       <main className="flex-1 w-full max-w-7xl mx-auto mt-6">
@@ -206,74 +288,182 @@ const Waiter = () => {
             </div>
 
             {/* Table Details / Actions Modal */}
-            {selectedTable && (
-              <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-5 z-50 animate-in fade-in duration-200">
-                <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-100 flex flex-col gap-4 animate-in zoom-in-95 duration-200">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-xl font-black text-gray-900">{formatTableName(selectedTable.tableNumber)}</h3>
-                      <p className="text-xs font-bold text-gray-400 mt-0.5">Masa ID: #{selectedTable.tableID}</p>
-                    </div>
-                    <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider ${
-                      selectedTable.status === 'empty' ? 'bg-gray-100 text-gray-500' :
-                      selectedTable.status === 'dining' ? 'bg-amber-100 text-amber-700' :
-                      'bg-red-100 text-red-600'
-                    }`}>
-                      {selectedTable.status === 'empty' ? 'Boş' :
-                       selectedTable.status === 'dining' ? 'Dolu' : 'Hesap Bekliyor'}
-                    </span>
-                  </div>
+            {selectedTable && (() => {
+              const currentTable = tables.find(t => t.tableNumber === selectedTable.tableNumber) || selectedTable;
+              const tableOrders = activeOrders.filter((o: ActiveOrderModel) => o.tableNumber === currentTable.tableNumber);
+              
+              const aggregatedItems = tableOrders.reduce((acc: AggregatedItem[], order: ActiveOrderModel) => {
+                order.details.forEach((detail: OrderDetailModel) => {
+                  const existing = acc.find((item: AggregatedItem) => item.productId === detail.productId);
+                  if (existing) {
+                    existing.quantity += detail.quantity;
+                  } else {
+                    acc.push({
+                      productId: detail.productId,
+                      productName: detail.productName,
+                      quantity: detail.quantity,
+                      unitPrice: detail.unitPrice
+                    });
+                  }
+                });
+                return acc;
+              }, [] as AggregatedItem[]);
 
-                  {selectedTable.activeOrderTotalPrice !== null && (
-                    <div className="bg-gray-50 p-4 rounded-2xl flex justify-between items-center border border-gray-100">
-                      <span className="font-extrabold text-sm text-gray-500">Mevcut Hesap</span>
-                      <span className="font-black text-xl text-secondary">₺{selectedTable.activeOrderTotalPrice}</span>
-                    </div>
-                  )}
+              const selectedTotal = Object.entries(selectedItemsToPay).reduce((sum: number, [prodIdStr, qty]: [string, number]) => {
+                const prodId = parseInt(prodIdStr, 10);
+                const item = aggregatedItems.find((i: AggregatedItem) => i.productId === prodId);
+                if (item) {
+                  return sum + (item.unitPrice * qty);
+                }
+                return sum;
+              }, 0);
 
-                  <div className="flex flex-col gap-2.5 mt-2">
-                    {selectedTable.status === 'waiting_bill' && (
-                      <button
-                        onClick={() => handleSettleBill(selectedTable)}
-                        disabled={actionLoading}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md active:scale-95 transition-all"
-                      >
-                        Hesabı Al ve Masayı Boşalt
-                      </button>
+              return (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-5 z-50 animate-in fade-in duration-200">
+                  <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl border border-gray-100 flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-xl font-black text-gray-900">{formatTableName(currentTable.tableNumber)}</h3>
+                        <p className="text-xs font-bold text-gray-400 mt-0.5">Masa ID: #{currentTable.tableID}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider ${
+                        currentTable.status === 'empty' ? 'bg-gray-100 text-gray-500' :
+                        currentTable.status === 'dining' ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-100 text-red-600'
+                      }`}>
+                        {currentTable.status === 'empty' ? 'Boş' :
+                         currentTable.status === 'dining' ? 'Dolu' : 'Hesap Bekliyor'}
+                      </span>
+                    </div>
+
+                    {currentTable.isOccupied && tableOrders.length > 0 && (
+                      <>
+                        {/* Ürün Seçerek Ödeme */}
+                        <div className="flex flex-col gap-3 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
+                          <span className="text-xs font-black text-gray-400 uppercase tracking-wider">Ürün Seçerek Öde</span>
+                          <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto pr-1">
+                            {aggregatedItems.map((item: AggregatedItem) => {
+                              const selectedQty = selectedItemsToPay[item.productId] || 0;
+                              return (
+                                <div key={item.productId} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-gray-100 shadow-xs font-display">
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="font-extrabold text-sm text-gray-800 truncate">{item.productName}</span>
+                                    <span className="text-xs font-bold text-gray-400">₺{item.unitPrice} × {item.quantity} adet</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleDecrement(item.productId)}
+                                      disabled={selectedQty === 0}
+                                      className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold flex items-center justify-center transition-colors disabled:opacity-30 disabled:hover:bg-gray-100 active:scale-90 cursor-pointer"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="w-5 text-center font-black text-sm text-gray-800">{selectedQty}</span>
+                                    <button
+                                      onClick={() => handleIncrement(item.productId, item.quantity)}
+                                      disabled={selectedQty === item.quantity}
+                                      className="w-7 h-7 rounded-lg bg-secondary hover:bg-hover text-white font-extrabold flex items-center justify-center transition-colors disabled:opacity-30 disabled:hover:bg-secondary active:scale-90 cursor-pointer"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Sipariş Geçmişi / Notlar */}
+                        <div className="flex flex-col gap-3 max-h-36 overflow-y-auto bg-gray-50/70 p-4 rounded-2xl border border-gray-100 font-display">
+                          <span className="text-xs font-black text-gray-400 uppercase tracking-wider">Sipariş Notları ve Detayları</span>
+                          <div className="flex flex-col gap-3">
+                            {tableOrders.map((order: ActiveOrderModel) => (
+                              <div key={order.orderId} className="border-b border-gray-200/50 last:border-0 pb-2 last:pb-0">
+                                <div className="flex justify-between items-center text-[10px] text-gray-400 font-extrabold mb-1">
+                                  <span>Sipariş #{order.orderId} • {order.orderTime}</span>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  {order.details.map((item: OrderDetailModel, idx: number) => (
+                                    <div key={idx} className="flex flex-col text-xs">
+                                      <div className="flex justify-between font-bold text-gray-600">
+                                        <span>{item.quantity}x {item.productName}</span>
+                                      </div>
+                                      {item.note && (
+                                        <p className="text-[10px] text-amber-600 font-medium italic mt-0.5 ml-2">
+                                          Not: {item.note}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
                     )}
 
-                    {selectedTable.status === 'dining' && (
-                      <button
-                        onClick={() => handleSettleBill(selectedTable)}
-                        disabled={actionLoading}
-                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md active:scale-95 transition-all mb-1"
-                      >
-                        Hesap Kapat (₺{selectedTable.activeOrderTotalPrice})
-                      </button>
+                    {currentTable.activeOrderTotalPrice !== null && (
+                      <div className="bg-gray-50 p-4 rounded-2xl flex justify-between items-center border border-gray-100 font-display">
+                        <span className="font-extrabold text-sm text-gray-500">Mevcut Toplam Hesap</span>
+                        <span className="font-black text-xl text-secondary">₺{currentTable.activeOrderTotalPrice}</span>
+                      </div>
                     )}
 
-                    <button
-                      onClick={() => handleToggleOccupied(selectedTable)}
-                      disabled={actionLoading}
-                      className={`w-full py-3 rounded-2xl font-black text-sm tracking-wide active:scale-95 transition-all ${
-                        selectedTable.isOccupied 
-                          ? 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100' 
-                          : 'bg-secondary text-white shadow-md hover:bg-hover'
-                      }`}
-                    >
-                      {selectedTable.isOccupied ? 'Masayı Boşalt (Hesapsız)' : 'Masayı Dolu Yap'}
-                    </button>
+                    <div className="flex flex-col gap-2.5 mt-2 font-display">
+                      {selectedTotal > 0 && (
+                        <button
+                          onClick={handlePaySelectedItems}
+                          disabled={actionLoading}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md active:scale-95 transition-all cursor-pointer"
+                        >
+                          Seçilenleri Öde (₺{selectedTotal})
+                        </button>
+                      )}
 
-                    <button
-                      onClick={() => setSelectedTable(null)}
-                      className="w-full bg-gray-100 hover:bg-gray-200 text-gray-500 py-3 rounded-2xl font-black text-sm tracking-wide active:scale-95 transition-all mt-1"
-                    >
-                      Kapat
-                    </button>
+                      {currentTable.status === 'waiting_bill' && (
+                        <button
+                          onClick={() => handleSettleBill(currentTable)}
+                          disabled={actionLoading}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md active:scale-95 transition-all cursor-pointer"
+                        >
+                          Hesabı Al ve Masayı Boşalt
+                        </button>
+                      )}
+
+                      {currentTable.status === 'dining' && (
+                        <button
+                          onClick={() => handleSettleBill(currentTable)}
+                          disabled={actionLoading}
+                          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-2xl font-black text-sm tracking-wide shadow-md active:scale-95 transition-all mb-1 cursor-pointer"
+                        >
+                          Hesap Kapat (₺{currentTable.activeOrderTotalPrice})
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleToggleOccupied(currentTable)}
+                        disabled={actionLoading}
+                        className={`w-full py-3 rounded-2xl font-black text-sm tracking-wide active:scale-95 transition-all cursor-pointer ${
+                          currentTable.isOccupied 
+                            ? 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100' 
+                            : 'bg-secondary text-white shadow-md hover:bg-hover'
+                        }`}
+                      >
+                        {currentTable.isOccupied ? 'Masayı Boşalt (Hesapsız)' : 'Masayı Dolu Yap'}
+                      </button>
+
+                      <button
+                        onClick={handleCloseModal}
+                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-500 py-3 rounded-2xl font-black text-sm tracking-wide active:scale-95 transition-all mt-1 cursor-pointer"
+                      >
+                        Kapat
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 

@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using server.Business.Table.Requests;
 
 namespace server.Api.Controllers
@@ -43,6 +44,31 @@ namespace server.Api.Controllers
                 RequestType = requestType 
             });
 
+            return result.IsSuccess ? Ok(result) : BadRequest(result.Message);
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> Create([FromBody] CreateTableRequest request)
+        {
+            var result = await _mediator.Send(request);
+            return result.IsSuccess ? Ok(result) : BadRequest(result.Message);
+        }
+
+        [HttpPut("{id}")]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateTableRequest request)
+        {
+            request.TableID = id;
+            var result = await _mediator.Send(request);
+            return result.IsSuccess ? Ok(result) : BadRequest(result.Message);
+        }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var result = await _mediator.Send(new DeleteTableRequest { TableID = id });
             return result.IsSuccess ? Ok(result) : BadRequest(result.Message);
         }
     }

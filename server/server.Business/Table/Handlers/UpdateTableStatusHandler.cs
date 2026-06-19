@@ -5,6 +5,7 @@ using server.Business.Hubs;
 using server.Business.Table.Models;
 using server.Business.Table.Requests;
 using server.Data.Context;
+using server.Data.Enums;
 
 namespace server.Business.Table.Handlers;
 
@@ -34,6 +35,29 @@ public class UpdateTableStatusHandler : IRequestHandler<UpdateTableStatusRequest
         }
 
         table.IsOccupied = request.IsOccupied;
+
+        if (!request.IsOccupied)
+        {
+            // Masa boşaltılıyorsa, bu masaya ait tüm aktif siparişleri tamamlandı (Completed = status 3) yap
+            var activeOrders = await _context.Orders
+                .Where(o => o.TableID == table.TableID && o.Status != OrderStatus.Completed && o.Status != OrderStatus.Cancelled)
+                .ToListAsync(cancellationToken);
+
+            foreach (var order in activeOrders)
+            {
+                order.Status = OrderStatus.Completed;
+                
+                // SignalR ile durumun değiştiğini yayınla
+                await _hubContext.Clients.All.SendAsync("OrderStatusChanged", new
+                {
+                    OrderId = order.OrderID,
+                    TableNumber = table.TableNumber,
+                    NewStatus = order.Status.ToString(),
+                    UpdateDate = DateTime.Now.ToString("HH:mm:ss")
+                }, cancellationToken);
+            }
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         // SignalR ile garsonlara masanın güncel durumunu bildir

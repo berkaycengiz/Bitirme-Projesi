@@ -37,6 +37,15 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrde
             };
         }
 
+        if (!table.IsOccupied)
+        {
+            return new CreateOrderModel
+            {
+                IsSuccess = false,
+                Message = "Bu masa henüz açık/dolu olarak işaretlenmemiş. Lütfen sipariş vermeden önce masanızı açtırın."
+            };
+        }
+
         // 2. Yeni bir ana sipariş kaydı oluşturuyoruz
         var newOrder = new server.Data.EF.Order
         {
@@ -76,7 +85,7 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrde
         await _context.SaveChangesAsync(cancellationToken);
 
         // --- 4. SIGNALR BİLDİRİMİ GÖNDERME ---
-        await _hubContext.Clients.Group("KitchenGroup").SendAsync("ReceiveNewOrder", new
+        var newOrderNotification = new
         {
             OrderId = newOrder.OrderID,
             TableNumber = table.TableNumber,
@@ -85,10 +94,15 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderRequest, CreateOrde
             TotalAmount = newOrder.TotalPrice,
             Details = newOrder.OrderDetails.Select(d => new {
                 ProductId = d.ProductID,
+                ProductName = d.Product != null ? d.Product.ProductName : "Yemek",
                 Quantity = d.Quantity,
-                Note = d.ProductNote
+                Note = d.ProductNote,
+                UnitPrice = d.UnitPrice
             })
-        }, cancellationToken);
+        };
+
+        await _hubContext.Clients.Group("KitchenGroup").SendAsync("ReceiveNewOrder", newOrderNotification, cancellationToken);
+        await _hubContext.Clients.Group("WaiterGroup").SendAsync("ReceiveNewOrder", newOrderNotification, cancellationToken);
 
         // 5. Sonucu dönüyoruz
         return new CreateOrderModel

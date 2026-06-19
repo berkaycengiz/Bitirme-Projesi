@@ -17,6 +17,7 @@ public class RegisterUserRequestValidator : AbstractValidator<RegisterUserReques
             .MinimumLength(6).WithMessage("Şifre en az 6 karakter olmalıdır.");
 
         RuleFor(x => x.Role)
-            .IsInEnum().WithMessage("Geçersiz rol seçimi.");
+            .Must(role => role == "admin" || role == "waiter" || role == "chef")
+            .WithMessage("Geçersiz rol seçimi. Geçerli roller: admin, waiter, chef.");
     }
 }
